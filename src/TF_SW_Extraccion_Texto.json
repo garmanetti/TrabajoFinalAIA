@@ -1,0 +1,166 @@
+{
+  "name": "TF_SW_Extraccion_Texto",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        -16
+      ],
+      "id": "623504cd-417f-4ada-bae3-7b4302d4934d",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.CV[0].mimetype }}",
+                    "rightValue": "^(image\\/(png|jpeg|jpg))$",
+                    "operator": {
+                      "type": "string",
+                      "operation": "regex"
+                    },
+                    "id": "211456d1-4f84-4f63-a77d-b149cbc561e3"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Imagen"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "66e9c7ae-8bd8-4b72-9d34-c91ab14f163f",
+                    "leftValue": "={{ $json.CV[0].mimetype }}",
+                    "rightValue": "^(application\\/pdf)$",
+                    "operator": {
+                      "type": "string",
+                      "operation": "regex"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Documento"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        224,
+        -16
+      ],
+      "id": "570c0ce4-0c41-442b-b3ee-7a37713095f9",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "documentType": "image_url",
+        "binaryProperty": "CV",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mistralAi",
+      "typeVersion": 1,
+      "position": [
+        448,
+        -112
+      ],
+      "id": "b881749a-acdc-4c79-a26a-1717b72d425a",
+      "name": "Extrae texto de imagen",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "i5LrESAvCIMdrpzM",
+          "name": "Mistral Cloud account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "binaryProperty": "CV",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mistralAi",
+      "typeVersion": 1,
+      "position": [
+        448,
+        80
+      ],
+      "id": "a8334324-ce74-449d-951b-2720bffd0e50",
+      "name": "Extrae texto de doc",
+      "credentials": {
+        "mistralCloudApi": {
+          "id": "i5LrESAvCIMdrpzM",
+          "name": "Mistral Cloud account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Extrae texto de imagen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extrae texto de doc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "411362f2-3975-430e-9973-98d7c7fed72d",
+  "meta": {
+    "instanceId": "87c57264427db34d6cb9d3745f87388c2f788b0742229f1a7c16b7376d7d87c6"
+  },
+  "id": "NQ0jY5lrXd3rPZQX",
+  "tags": []
+}

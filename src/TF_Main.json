@@ -1,0 +1,512 @@
+{
+  "name": "TF_Main",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "53efeac5-cf4d-43fe-9fe3-a9e3ed205e2c",
+        "formTitle": "Obtén ofertas de trabajo a partir de tu CV",
+        "formDescription": "Sube tu CV y recibe por correo las ofertas laborales de acorde a tu perfil",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Email",
+              "fieldType": "email",
+              "placeholder": "Email donde deseas recibir el informe",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "CV",
+              "fieldType": "file",
+              "acceptFileTypes": ".pdf,.png,.jpg",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c4332421-9093-42d0-9d96-9f318fb6a8ef",
+      "name": "Formulario",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2,
+      "position": [
+        0,
+        128
+      ],
+      "webhookId": "53efeac5-cf4d-43fe-9fe3-a9e3ed205e2c"
+    },
+    {
+      "parameters": {
+        "url": "https://jsearch.p.rapidapi.com/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "query",
+              "value": "={{ $json.Query }} en {{ $json.Location }}"
+            },
+            {
+              "name": "country",
+              "value": "={{ $json.Country }}"
+            },
+            {
+              "name": "=language",
+              "value": "={{ $json.Language }}"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1024,
+        224
+      ],
+      "id": "74de86d9-189c-425c-9b2d-f587e766e473",
+      "name": "Búsqueda de ofertas",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "PedXEHexYqkZNoSA",
+          "name": "Header RapidAPI- JSearch"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Nodo de formato de HTML para el email\nreturn [{\n  json: {\n    html: (() => {\n      // 1) Recoger y filtrar items combinados (oferta + scoring)\n      const items = $input.all().map(i => i.json).filter(j => j && Object.keys(j).length);\n\n      // 2) Mostrar mensaje si no hay vacantes\n      if (!items.length) {\n        return `\n          <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"\n                 style=\"font-family:Arial,sans-serif;color:#333;background:#fff;\">\n            <tr>\n              <td style=\"padding:20px;\">\n                <p style=\"font-size:16px;color:#1a73e8;\">\n                  No se encontraron vacantes disponibles.\n                </p>\n              </td>\n            </tr>\n          </table>\n        `;\n      }\n\n      // 3) Ordenar vacantes de mayor a menor match_score\n      items.sort((a, b) => (b.message?.content?.match_score || 0) - (a.message?.content?.match_score || 0));\n\n      // 4) Obtener feedback y perfiles del análisis de CV (nodo Convierte a JSON)\n      const feedback = $('AI Agent').first().json.output.cv_feedback || {};\n      const profiles = $('AI Agent').first().json.output.job_profiles || [];\n      const firstName= '';\n\n      // 5) Normalizar fortalezas y mejoras\n      const strengthsArr = Array.isArray(feedback.strengths)\n        ? feedback.strengths\n        : [feedback.strengths || 'Sin fortalezas'];\n      const improvementsArr = Array.isArray(feedback.improvements)\n        ? feedback.improvements\n        : [feedback.improvements || 'Sin sugerencias'];\n\n      const strengths = strengthsArr\n        .map(s => `<tr><td style=\"padding:4px 0;font-size:14px;\">• ${s}</td></tr>`)\n        .join('');\n      const improvements = improvementsArr\n        .map(i => `<tr><td style=\"padding:4px 0;font-size:14px;\">• ${i}</td></tr>`)\n        .join('');\n      const rewritten = feedback.suggested_rewrite || 'Sin datos';\n\n      // 6) Lista de perfiles usados para búsqueda\n      const profilesList = profiles\n        .map(p => `\n          <tr>\n            <td style=\"padding:2px 0;font-size:14px;\">\n              • <strong>${p.Query}</strong> – ${p.Location || 'Ubicación no especificada'} | ${p.Language}\n            </td>\n          </tr>\n        `)\n        .join('');\n\n      // 7) Resumen de vacantes (TOC) con match_score resaltado\n      const toc = items\n        .map((job, idx) => {\n          const score = job.message.content.match_score ?? 'N/A';\n          return `\n            <tr>\n              <td style=\"padding:4px 0;font-size:14px;\">\n                ${idx+1}. ${job.job_title}\n                <span style=\"\n                  background-color:#fff9e5;\n                  padding:2px 6px;\n                  border-radius:4px;\n                  color:#f5a623;\n                  font-weight:bold;\n                  margin-left:8px;\n                \">${score}%</span>\n              </td>\n            </tr>\n          `;\n        })\n        .join('');\n\n      // 8) Detalle de cada vacante\n      const content = items\n        .map((job, idx) => {\n          const {\n            employer_logo,\n            employer_name   = 'Empresa desconocida',\n            job_title       = 'Sin título',\n            job_location    = 'Ubicación no especificada',\n            job_employment_type = 'Tipo no especificado',\n            job_description = 'Sin descripción',\n            job_posted_at,\n            apply_options   = []\n          } = job;\n\n          const score = job.message.content.match_score ?? 'N/A';\n          const matched = Array.isArray(job.message.content.matched_skills)\n            ? job.message.content.matched_skills\n            : [];\n          const note = job.message.content.note || '';\n\n          const descHtml = job_description.replace(/\\n/g, '<br/>');\n          const applyHtml = apply_options.length\n            ? apply_options\n                .map(opt => `\n                  <a href=\"${opt.apply_link || '#'}\" target=\"_blank\" style=\"\n                    display:inline-block;\n                    padding:6px 8px;\n                    font-size:13px;\n                    border-radius:4px;\n                    background-color:#1a73e8;\n                    color:#fff;\n                    text-decoration:none;\n                    margin-right:4px;\n                  \">\n                    Postularse en ${opt.publisher}\n                  </a>\n                `)\n                .join('')\n            : '<p style=\"font-size:14px;margin:0;\">Sin enlaces de postulación</p>';\n\n          const scoreHtml = `\n            <div style=\"\n              background-color:#fff9e5;\n              border:1px solid #f5a623;\n              border-radius:6px;\n              padding:10px;\n              margin:12px 0;\n            \">\n              <p style=\"margin:0 0 6px 0;font-size:14px;color:#333;\">\n                <strong>Match:</strong> ${score}%\n              </p>\n              <p style=\"margin:0 0 8px 0;font-size:13px;color:#555;\">\n                ${note}\n              </p>\n              <p style=\"margin:0 0 8px 0;font-size:13px;color:#555;\">\n                Habilidades coincidentes:\n                <ul style=\"margin:0 0 0 8px;font-size:13px;color:#555;\">\n                  ${matched.map(s => `<li style=\"margin:4px 0;\">${s}</li>`).join('')}\n                </ul>\n              </p>\n            </div>\n          `;\n\n          return `\n            <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"\n              border:1px solid #ddd;\n              border-radius:8px;\n              background:#f5f5f5;\n              margin-bottom:20px;\n              font-family:Arial,sans-serif;\n            \">\n              <tr>\n                <td style=\"padding:15px;\">\n\n                  <p style=\"margin:0 0 8px 0;font-size:12px;color:#888;\">\n                    <strong>Vacante ${idx+1}</strong>\n                  </p>\n                  ${employer_logo\n                    ? `<img src=\"${employer_logo}\" alt=\"Logo\" width=\"80\" style=\"margin:8px 0;display:block;\"/>`\n                    : ''}\n                  <p style=\"margin:4px 0;font-size:16px;color:#1a73e8;\">\n                    <strong>${employer_name}</strong>\n                  </p>\n                  <p style=\"margin:2px 0;font-size:15px;color:#333;\">\n                    <strong>${job_title}</strong>\n                  </p>\n                  <p style=\"margin:4px 0;font-size:14px;color:#555;\">\n                    📍 ${job_location}\n                  </p>\n                  <p style=\"margin:4px 0;font-size:14px;color:#555;\">\n                    💼 ${job_employment_type}\n                  </p>                  \n                  <p style=\"margin:4px 0;font-size:14px;color:#555;\">\n                    📅 Publicado: ${job_posted_at || 'sin datos'}\n                  </p>                  \n                  <div style=\"margin-top:12px;\">${applyHtml}</div>\n\n                  ${scoreHtml}\n\n                  <p style=\"margin:8px 0;font-size:14px;color:#333;\">\n                    ${descHtml}\n                  </p>  \n                  <p style=\"margin:4px 0;font-size:11px;color:#555;\">\n                    ID ${job.job_id}\n                  </p>                  \n                </td>\n              </tr>\n            </table>\n          `;\n        })\n        .join('');\n\n      // 9) Ensamblaje final del email\n      return `\n        <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"\n          font-family:Arial,sans-serif;\n          color:#333;\n          background:#fff;\n        \">\n          <tr>\n            <td style=\"padding:20px;\">\n\n              <!-- Saludo e introducción -->\n              <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-bottom:20px;\">\n                <tr>\n                  <td style=\"padding-bottom:10px;font-size:16px;\">Hola ${firstName},</td>\n                </tr>\n                <tr>\n                  <td style=\"padding-bottom:15px;font-size:14px;\">Aquí tienes el análisis de tu CV y los resultados de búsqueda de vacantes en tu ciudad.</td>\n                </tr>\n              </table>\n\n              <!-- Análisis de CV -->\n              <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-bottom:20px;\">\n                <tr>\n                  <td style=\"font-size:18px;color:#1a73e8; padding-bottom:8px;border-bottom:2px solid #1a73e8;\">Análisis de tu CV</td>\n                </tr>\n                <tr>\n                  <td style=\"font-size:16px;color:#1a73e8;padding-top:12px;\">Resúmen sugerido</td>\n                </tr>\n                <tr>\n                  <td style=\"padding:8px 0;font-size:14px;\">${rewritten}</td>\n                </tr>\n                <tr>\n                  <td style=\"font-size:16px;color:#1a73e8;padding-top:12px;\">Fortalezas</td>\n                </tr>\n                ${strengths}\n                <tr>\n                  <td style=\"font-size:16px;color:#1a73e8;padding-top:12px;\">Áreas de mejora</td>\n                </tr>\n                ${improvements}\n              </table>\n\n              <!-- Datos usados para búsqueda -->\n              <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-bottom:20px;\">\n                <tr>\n                  <td style=\"font-size:18px;color:#1a73e8;border-bottom:2px solid #1a73e8;padding-bottom:8px;\">Datos usados para búsqueda</td>\n                </tr>\n                ${profilesList}\n              </table>\n\n              <!-- Resumen de Vacantes -->\n              <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-bottom:10px;\">\n                <tr>\n                  <td style=\"font-size:18px;color:#1a73e8;border-bottom:2px solid #1a73e8;padding-bottom:8px;\">Resumen de Vacantes</td>\n                </tr>\n                ${toc}\n              </table>\n\n              <!-- Tarjetas de Vacantes -->\n              ${content}\n\n            </td>\n          </tr>\n        </table>\n      `;\n    })()\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2496,
+        128
+      ],
+      "id": "9530f0a0-b0ff-42ee-a9e8-3fba650457d4",
+      "name": "Formatea resultados en HTML"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "=output.profiles",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        800,
+        224
+      ],
+      "id": "7a489f78-be24-43fe-9e32-a8f85721fbcf",
+      "name": "Separa los profiles"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// FunctionItem “Prepara para scoring”\n// Este código extrae del campo 'job_description' la sección de requisitos\n// que comience tras la palabra 'Requisitos:', leyendo cada línea que empiece\n// con '-' o '•'. Crea un array 'required_skills' con esas entradas.\n// Luego prepara el payload para el nodo de scoring incluyendo:\n//  - job_title\n//  - job_description\n//  - cv_summary, cv_strengths, cv_improvements, cv_skills desde cv_feedback\n//  - required_skills extraído automáticamente\nreturn {\n  json: (() => {\n    const feedback = $json.cv_feedback || {};\n    const desc = $json.job_description || '';\n    const lines = desc.split(\"\\n\");\n    let inReq = false;\n    const required_skills = [];\n    for (const line of lines) {\n      const trimmed = line.trim();\n      // Detecta el inicio de la sección \"Requisitos:\" (case-insensitive)\n      if (/^Requisitos[:]?/i.test(trimmed)) {\n        inReq = true;\n        continue;\n      }\n      if (inReq) {\n        // Si la línea empieza con viñeta '-' o '•', extrae el texto\n        const match = trimmed.match(/^[\\-•]\\s*(.+)/);\n        if (match) {\n          required_skills.push(match[1]);\n        }\n        // Si encuentra una línea en blanco o que no tiene viñeta, asume fin de sección\n        else if (!trimmed) {\n          break;\n        }\n      }\n    }\n\n    return {\n      job_id:          $json.job_id,\n      job_title:        $json.job_title || '',\n      job_description:  desc,\n      cv_summary:       feedback.suggested_rewrite || 'Sin resumen disponible',\n      cv_strengths:     Array.isArray(feedback.strengths) ? feedback.strengths : (feedback.strengths ? [feedback.strengths] : []),\n      cv_improvements:  Array.isArray(feedback.improvements) ? feedback.improvements : (feedback.improvements ? [feedback.improvements] : []),\n      cv_skills:        Array.isArray(feedback.skills) ? feedback.skills : (feedback.skills ? [feedback.skills] : []),\n      required_skills  // Array con los requisitos extraídos o vacío si no se detectó la sección\n    };\n  })()\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        208
+      ],
+      "id": "d662d362-37c9-4147-b672-4b0fb8de8447",
+      "name": "Prepara para scoring"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Primero, recuperamos todos los items de entrada\nconst items = $input.all();\n\n// 1) Extraer feedback del CV\nconst cvItem = items.find(i => i.json.cv_feedback)?.json.cv_feedback || {};\n\n// 2) Recolectar y aplanar todos los arrays `data` de las búsquedas\nconst allJobs = items\n  .filter(i => Array.isArray(i.json.data))\n  .flatMap(i => i.json.data);\n\n// 3) Devolver un item por cada vacante, embebiendo el cv_feedback\nreturn allJobs.map(job => ({\n  json: {\n    ...job,\n    cv_feedback: cvItem\n  }\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        128
+      ],
+      "id": "6a3d698a-e242-4bef-acb1-28a5e325ac6c",
+      "name": "Une CV con Vacantes"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1248,
+        128
+      ],
+      "id": "a1254178-00d7-445a-b1ad-e952cc31b44d",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "advanced": true,
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "job_id",
+              "field2": "message.content.job_id"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2272,
+        128
+      ],
+      "id": "54f985f4-fad2-4bf8-80d1-10f0e2b4bcd1",
+      "name": "Merge2"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-3.5-turbo",
+          "mode": "list",
+          "cachedResultName": "GPT-3.5-TURBO"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Eres un sistema de scoring que evalúa el nivel de compatibilidad (“match”) entre un perfil profesional y una oferta de trabajo. Usa IA para:\n\n1) Comparar cada skill requerida con las skills del cv, usando sinónimos y términos relacionados (fuzzy matching).  \n2) Calcular un número entero \"match_score\" (0–100) basado en:\n   • % de skills requeridas encontradas en las skills del cv\n   • Además considera para el cálculo a las fortalezas y el resumen del cv.\n3) Devolver solo un objeto JSON EXACTO (sin texto adicional):\n\n{\n  \"job_id\":        \"{{ $json.job_id }}\",\n  \"match_score\":   <entero entre 0 y 100>,\n  \"matched_skills\": [ /* subset de required_skills que coinciden */ ],\n  \"note\":          \"<breve explicación de cómo llegaste al score>\"\n}\n\nInput:\n{\n  \"job_id\":          \"{{ $json.job_id }}\",\n  \"required_skills\": {{ $json.required_skills }},\n  \"cv_skills\":       {{ $json.cv_skills }},\n  \"cv_summary\":      \"{{ $json.cv_summary }}\",\n  \"cv_strengths\":    {{ $json.cv_strengths }},\n  \"cv_improvements\": {{ $json.cv_improvements }}\n}\n"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [
+        1920,
+        208
+      ],
+      "id": "68cc208d-badf-4242-b54a-42b9ff0203ee",
+      "name": "Calcula score",
+      "credentials": {
+        "openAiApi": {
+          "id": "Zu648RhdCuE7jpti",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.extractedText }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a professional resume assistant.\n\n1. Extract all visible text from the provided resume image.\n2. Based on that text, infer potential job profiles for a LinkedIn job search. For each profile, return:\n   - Query (job title in the same language as the resume)\n   - Country (ISO 3166-1 alpha-2)\n   - Language (ISO 639-1 code)\n   - Job_requirements (only one or more of: under_3_years_experience, more_than_3_years_experience, no_experience, no_degree)\n   - Location (city or region of interest inferred or default to candidate’s location)\n\n3. Provide resume feedback:\n   - strengths (array of key strengths)\n   - improvements (array of suggestions to improve)\n   - suggested_rewrite (short summary of profile rewritten for better impact)\n   - skills (array of the candidate’s main technical and soft skills)\n\nImportant:\n- Always use the **same language as the resume** for all fields (queries, feedback, rewrite, skills, etc.).\n- Do **not translate** or switch to English unless the resume is written in English.\n- Respect the grammatical gender of the candidate (e.g., \"abogada\" if inference allows).\n\n- Responde en formato JSON y con el formato  como especifica el output parser"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        128
+      ],
+      "id": "6d4736ec-dcf4-42b7-8a63-db632e392703",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        464,
+        352
+      ],
+      "id": "b7c64224-b27c-4f4b-bcd7-245d405271d3",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "Zu648RhdCuE7jpti",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"$schema\": \"https://json-schema.org/draft/2020-12/schema\",\n  \"type\": \"object\",\n  \"properties\": {\n    \"profiles\": {\n      \"type\": \"array\",\n      \"items\": {\n        \"type\": \"object\",\n        \"properties\": {\n          \"Query\": { \"type\": \"string\" },\n          \"Country\": { \"type\": \"string\" },\n          \"Language\": { \"type\": \"string\" },\n          \"Job_requirements\": { \"type\": \"string\" },\n          \"Location\": { \"type\": \"string\" }\n        },\n        \"required\": [\"Query\", \"Country\", \"Language\", \"Job_requirements\", \"Location\"],\n        \"additionalProperties\": false\n      }\n    },\n    \"cv_feedback\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"strengths\": {\n          \"type\": \"array\",\n          \"items\": { \"type\": \"string\" }\n        },\n        \"improvements\": {\n          \"type\": \"array\",\n          \"items\": { \"type\": \"string\" }\n        },\n        \"suggested_rewrite\": { \"type\": \"string\" },\n        \"skills\": {\n          \"type\": \"array\",\n          \"items\": { \"type\": \"string\" }\n        }\n      },\n      \"required\": [\"strengths\", \"improvements\", \"suggested_rewrite\", \"skills\"],\n      \"additionalProperties\": false\n    }\n  },\n  \"required\": [\"profiles\", \"cv_feedback\"],\n  \"additionalProperties\": false\n}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        592,
+        352
+      ],
+      "id": "8c3237b3-c2af-47a1-bd10-8e1c7dbe8f48",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "19a7c74f-1872-4f6a-a0e0-cea83fff8066",
+              "name": "cv_feedback",
+              "value": "={{ $json.output.cv_feedback }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1024,
+        32
+      ],
+      "id": "68bc447b-8d4f-4604-8a4d-e2588d31ff64",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Formulario').all()[0].json.Email }}\n",
+        "subject": "Resultados de la búsqueda",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2720,
+        128
+      ],
+      "id": "decc6a12-5d11-42eb-af9a-52ddc47eaf22",
+      "name": "Aviso resultados",
+      "webhookId": "768d6f13-2391-4ebf-a239-50daf60a136c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "LBYgrBdSerg8YIrl",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "NQ0jY5lrXd3rPZQX",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/NQ0jY5lrXd3rPZQX",
+          "cachedResultName": "TF_SW_Extraccion_Texto"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {}
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        224,
+        128
+      ],
+      "id": "e40c619e-91c2-48c8-8dde-1d3b026e20ed",
+      "name": "Extraccion texto"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Formulario": {
+      "main": [
+        [
+          {
+            "node": "Extraccion texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Búsqueda de ofertas": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Formatea resultados en HTML": {
+      "main": [
+        [
+          {
+            "node": "Aviso resultados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separa los profiles": {
+      "main": [
+        [
+          {
+            "node": "Búsqueda de ofertas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepara para scoring": {
+      "main": [
+        [
+          {
+            "node": "Calcula score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Une CV con Vacantes": {
+      "main": [
+        [
+          {
+            "node": "Prepara para scoring",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "Une CV con Vacantes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge2": {
+      "main": [
+        [
+          {
+            "node": "Formatea resultados en HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcula score": {
+      "main": [
+        [
+          {
+            "node": "Merge2",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Separa los profiles",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraccion texto": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "U1Y5eBAavHz4xTQw"
+  },
+  "versionId": "4430da8c-d589-4ada-9c60-cec77429ffcd",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "87c57264427db34d6cb9d3745f87388c2f788b0742229f1a7c16b7376d7d87c6"
+  },
+  "id": "sKgOEzXZhORJ9puQ",
+  "tags": []
+}
