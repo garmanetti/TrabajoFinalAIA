@@ -1,0 +1,169 @@
+{
+  "name": "TF_Monitoreo_Error",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "73014ba0-bc58-4042-8e3c-63e84075cf52",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1bgdLTJwJmLo_KgiEfkmRnAf1l4fvovBQq9kavFUeOC4",
+          "mode": "list",
+          "cachedResultName": "Monitoreo error",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bgdLTJwJmLo_KgiEfkmRnAf1l4fvovBQq9kavFUeOC4/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Hoja 1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1bgdLTJwJmLo_KgiEfkmRnAf1l4fvovBQq9kavFUeOC4/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Fecha": "={{ $now }}",
+            "Workflow": "={{ $json.workflow.name }}",
+            "URL": "={{ $json.execution.url }}",
+            "Nodo": "={{ $json.execution.lastNodeExecuted }}",
+            "Mensaje de error": "={{ $json.execution.error.message }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Fecha",
+              "displayName": "Fecha",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Workflow",
+              "displayName": "Workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "URL",
+              "displayName": "URL",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Nodo",
+              "displayName": "Nodo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Mensaje de error",
+              "displayName": "Mensaje de error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        208,
+        0
+      ],
+      "id": "ad0b087f-26bd-4fd4-8dc5-8d2a8ba5dad8",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "78Poa136YXCvI8jD",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "gaston.armanetti@gmail.com",
+        "subject": "Error encontrado",
+        "message": "={{ $json.workflow.name }} El nodo {{ $json.execution.lastNodeExecuted }} falló  Mensaje del error: {{ $json.execution.error.stack }}  Link de ejecucion: {{ $json.execution.url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        416,
+        0
+      ],
+      "id": "eeeae2ae-53b0-4806-b298-4939311cd096",
+      "name": "Send a message",
+      "webhookId": "65dc016b-81f2-49b6-9eb1-e859d0f15bbd",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "LBYgrBdSerg8YIrl",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "e5bd0df6-98dd-4c37-b792-57546f806199",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "87c57264427db34d6cb9d3745f87388c2f788b0742229f1a7c16b7376d7d87c6"
+  },
+  "id": "U1Y5eBAavHz4xTQw",
+  "tags": []
+}

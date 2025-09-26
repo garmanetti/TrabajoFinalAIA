@@ -16,17 +16,27 @@ Desarrollar un workflow funcional que:
 
 ## 🏗️ Arquitectura del Sistema
 
-El proyecto está compuesto por dos workflows principales:
+El proyecto está compuesto por tres workflows principales:
 
 ### 1. **TF_Main** - Workflow Principal
 - **Trigger**: Formulario web para subir CV y email
 - **Funcionalidad**: Orquesta todo el proceso de análisis y búsqueda
 - **Nodos**: 12 nodos activos
+- **Monitoreo**: Integrado con sistema de manejo de errores
 
 ### 2. **TF_SW_Extraccion_Texto** - Subworkflow
 - **Trigger**: Ejecutado por el workflow principal
 - **Funcionalidad**: Extrae texto de CVs (PDF e imágenes)
 - **Nodos**: 3 nodos activos
+
+### 3. **TF_Monitoreo_Error** - Workflow de Monitoreo
+- **Trigger**: Error Trigger (se activa automáticamente en caso de errores)
+- **Funcionalidad**: Registra errores y envía notificaciones
+- **Nodos**: 3 nodos activos
+- **Características**:
+  - Registra errores en Google Sheets
+  - Envía alertas por email al administrador
+  - Proporciona información detallada del error y contexto
 
 ## 🔄 Flujo del Proceso
 
@@ -69,6 +79,8 @@ graph TD
 - **Function Nodes**: Transformación y procesamiento de datos
 - **Merge/SplitOut**: Combinación y separación de datos
 - **Gmail**: Envío de emails
+- **Error Trigger**: Monitoreo automático de errores
+- **Google Sheets**: Registro de errores y métricas
 
 ## 📦 Instalación y Configuración
 
@@ -79,6 +91,7 @@ graph TD
   - OpenAI
   - RapidAPI (JSearch)
   - Gmail (OAuth2)
+  - Google Sheets (OAuth2)
 
 ### Pasos de Instalación
 
@@ -87,6 +100,7 @@ graph TD
    # En n8n, importar los siguientes archivos:
    - src/TF_Main.json
    - src/TF_SW_Extraccion_Texto.json
+   - src/TF_Monitoreo_Error.json
    ```
 
 2. **Configurar Credenciales**
@@ -112,8 +126,15 @@ graph TD
    - Nombre: `Gmail account`
    - Configurar OAuth2 con tu cuenta de Gmail
 
+   **Google Sheets:**
+   - Tipo: `Google Sheets OAuth2`
+   - Nombre: `Google Sheets account`
+   - Configurar OAuth2 con tu cuenta de Google
+   - Crear una hoja de cálculo para el registro de errores
+
 3. **Activar Workflows**
    - Activar el workflow principal `TF_Main`
+   - Activar el workflow de monitoreo `TF_Monitoreo_Error`
    - El subworkflow `TF_SW_Extraccion_Texto` se activa automáticamente
 
 ## 🚀 Uso del Sistema
@@ -188,6 +209,31 @@ graph TD
 }
 ```
 
+## 📊 Sistema de Monitoreo de Errores
+
+El proyecto incluye un sistema robusto de monitoreo que registra y notifica automáticamente cualquier error que ocurra durante la ejecución:
+
+### Características del Monitoreo
+- **Registro Automático**: Todos los errores se registran en Google Sheets con:
+  - Fecha y hora del error
+  - Nombre del workflow que falló
+  - URL de la ejecución
+  - Nodo específico donde ocurrió el error
+  - Mensaje detallado del error
+
+- **Notificaciones Inmediatas**: Se envía un email al administrador con:
+  - Información del error
+  - Stack trace completo
+  - Enlace directo a la ejecución en n8n
+
+- **Activación Automática**: El sistema se activa automáticamente cuando hay errores, sin intervención manual
+
+### Configuración del Monitoreo
+1. **Crear Hoja de Google Sheets** para el registro de errores
+2. **Configurar credenciales** de Google Sheets OAuth2
+3. **Activar el workflow** `TF_Monitoreo_Error`
+4. **Verificar notificaciones** en el email configurado
+
 ## 🔧 Configuración Avanzada
 
 ### Personalizar Búsquedas
@@ -233,42 +279,15 @@ Edita el nodo "Formatea resultados en HTML" para:
 - Revisar logs de ejecución en n8n
 - Usar el modo debug para inspeccionar datos entre nodos
 - Verificar conectividad de APIs externas
+- **Monitoreo Automático**: Consultar la hoja de Google Sheets para ver historial de errores
+- **Notificaciones**: Revisar emails automáticos con detalles de errores
 
-## 📈 Mejoras Futuras
-
-### Funcionalidades Adicionales
-- [ ] Soporte para más formatos de CV (DOC, DOCX)
-- [ ] Integración con LinkedIn
-- [ ] Dashboard de estadísticas
-- [ ] Notificaciones push
-- [ ] Múltiples idiomas en la interfaz
-
-### Optimizaciones
-- [ ] Cache de resultados de búsqueda
-- [ ] Procesamiento en lotes
-- [ ] Rate limiting inteligente
-- [ ] Compresión de imágenes
 
 ## 👥 Contribuciones
 
 Este proyecto fue desarrollado como trabajo final del curso de Automatismos con IA.
 
-### Autores
-- [Tu nombre aquí]
-- [Nombres del equipo]
-
 ### Licencia
 Este proyecto es para fines educativos.
 
-## 📞 Soporte
 
-Para soporte técnico o preguntas sobre el proyecto:
-- Revisar la documentación
-- Consultar logs de n8n
-- Contactar al equipo de desarrollo
-
----
-
-**Versión**: 1.0  
-**Última actualización**: [Fecha actual]  
-**Estado**: ✅ Funcional y listo para producción
