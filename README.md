@@ -143,7 +143,7 @@ graph TD
 
 1. **Acceder al Formulario**
    - Visita la URL del formulario web generada por n8n
-   - Ejemplo: `https://tu-instancia-n8n.com/form/53efeac5-cf4d-43fe-9fe3-a9e3ed205e2c`
+   - https://n8n.srv899304.hstgr.cloud/form/53efeac5-cf4d-43fe-9fe3-a9e3ed205e2c
 
 2. **Subir CV**
    - Completa el campo de email
@@ -211,7 +211,7 @@ graph TD
 
 ## 📊 Sistema de Monitoreo de Errores
 
-El proyecto incluye un sistema robusto de monitoreo que registra y notifica automáticamente cualquier error que ocurra durante la ejecución:
+El proyecto incluye un sistema de monitoreo que registra y notifica automáticamente cualquier error que ocurra durante la ejecución:
 
 ### Características del Monitoreo
 - **Registro Automático**: Todos los errores se registran en Google Sheets con:
