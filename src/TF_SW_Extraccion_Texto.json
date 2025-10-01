@@ -54,7 +54,7 @@
                   {
                     "id": "66e9c7ae-8bd8-4b72-9d34-c91ab14f163f",
                     "leftValue": "={{ $json.CV[0].mimetype }}",
-                    "rightValue": "^(application\\/pdf)$",
+                    "rightValue": "^(application\\/pdf|application\\/msword|application\\/vnd\\.openxmlformats-officedocument\\.wordprocessingml\\.document)$",
                     "operator": {
                       "type": "string",
                       "operation": "regex"
@@ -155,9 +155,11 @@
   },
   "active": false,
   "settings": {
-    "executionOrder": "v1"
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "U1Y5eBAavHz4xTQw"
   },
-  "versionId": "411362f2-3975-430e-9973-98d7c7fed72d",
+  "versionId": "a790d4ac-3692-48a6-93b3-fcf7ef514adf",
   "meta": {
     "instanceId": "87c57264427db34d6cb9d3745f87388c2f788b0742229f1a7c16b7376d7d87c6"
   },

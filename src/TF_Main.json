@@ -5,7 +5,7 @@
       "parameters": {
         "path": "53efeac5-cf4d-43fe-9fe3-a9e3ed205e2c",
         "formTitle": "Obtén ofertas de trabajo a partir de tu CV",
-        "formDescription": "Sube tu CV y recibe por correo las ofertas laborales de acorde a tu perfil",
+        "formDescription": "Sube tu CV y recibe por correo las ofertas laborales de acorde a tu perfil. Puedes enviar un documento en formato PDF o Word o un archivo de imagen.",
         "formFields": {
           "values": [
             {
@@ -17,7 +17,7 @@
             {
               "fieldLabel": "CV",
               "fieldType": "file",
-              "acceptFileTypes": ".pdf,.png,.jpg",
+              "acceptFileTypes": ".bmp,.png,.jpg,.doc,.docx,.pdf",
               "requiredField": true
             }
           ]
@@ -109,7 +109,7 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "// FunctionItem “Prepara para scoring”\n// Este código extrae del campo 'job_description' la sección de requisitos\n// que comience tras la palabra 'Requisitos:', leyendo cada línea que empiece\n// con '-' o '•'. Crea un array 'required_skills' con esas entradas.\n// Luego prepara el payload para el nodo de scoring incluyendo:\n//  - job_title\n//  - job_description\n//  - cv_summary, cv_strengths, cv_improvements, cv_skills desde cv_feedback\n//  - required_skills extraído automáticamente\nreturn {\n  json: (() => {\n    const feedback = $json.cv_feedback || {};\n    const desc = $json.job_description || '';\n    const lines = desc.split(\"\\n\");\n    let inReq = false;\n    const required_skills = [];\n    for (const line of lines) {\n      const trimmed = line.trim();\n      // Detecta el inicio de la sección \"Requisitos:\" (case-insensitive)\n      if (/^Requisitos[:]?/i.test(trimmed)) {\n        inReq = true;\n        continue;\n      }\n      if (inReq) {\n        // Si la línea empieza con viñeta '-' o '•', extrae el texto\n        const match = trimmed.match(/^[\\-•]\\s*(.+)/);\n        if (match) {\n          required_skills.push(match[1]);\n        }\n        // Si encuentra una línea en blanco o que no tiene viñeta, asume fin de sección\n        else if (!trimmed) {\n          break;\n        }\n      }\n    }\n\n    return {\n      job_id:          $json.job_id,\n      job_title:        $json.job_title || '',\n      job_description:  desc,\n      cv_summary:       feedback.suggested_rewrite || 'Sin resumen disponible',\n      cv_strengths:     Array.isArray(feedback.strengths) ? feedback.strengths : (feedback.strengths ? [feedback.strengths] : []),\n      cv_improvements:  Array.isArray(feedback.improvements) ? feedback.improvements : (feedback.improvements ? [feedback.improvements] : []),\n      cv_skills:        Array.isArray(feedback.skills) ? feedback.skills : (feedback.skills ? [feedback.skills] : []),\n      required_skills  // Array con los requisitos extraídos o vacío si no se detectó la sección\n    };\n  })()\n};\n"
+        "jsCode": "return {\n  json: (() => {\n    const feedback = $json.cv_feedback || {};\n    const desc = typeof $json.job_description === 'string' ? $json.job_description : '';\n    const lines = desc.split(\"\\n\");\n\n    let inReq = false;\n    const required_skills = [];\n\n    for (const line of lines) {\n      const trimmed = line.trim();\n      if (/^Requisitos[:]?/i.test(trimmed)) {\n        inReq = true;\n        continue;\n      }\n      if (inReq) {\n        const match = trimmed.match(/^[\\-•]\\s*(.+)/);\n        if (match) {\n          required_skills.push(match[1]);\n        } else if (!trimmed) {\n          break;\n        }\n      }\n    }\n\n    // Función utilitaria para normalizar a array\n    const normalizeToArray = (val) => {\n      if (Array.isArray(val)) return val;\n      if (val == null || val === '') return [];\n      return [val];\n    };\n\n    return {\n      job_id:          $json.job_id ?? '',  // Usa '' si es null/undefined\n      job_title:       typeof $json.job_title === 'string' ? $json.job_title : '',\n      job_description: desc,\n      cv_summary:      typeof feedback.suggested_rewrite === 'string' && feedback.suggested_rewrite.trim()\n                        ? feedback.suggested_rewrite\n                        : 'Sin resumen disponible',\n      cv_strengths:    normalizeToArray(feedback.strengths),\n      cv_improvements: normalizeToArray(feedback.improvements),\n      cv_skills:       normalizeToArray(feedback.skills),\n      required_skills\n    };\n  })()\n};\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -122,7 +122,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// Primero, recuperamos todos los items de entrada\nconst items = $input.all();\n\n// 1) Extraer feedback del CV\nconst cvItem = items.find(i => i.json.cv_feedback)?.json.cv_feedback || {};\n\n// 2) Recolectar y aplanar todos los arrays `data` de las búsquedas\nconst allJobs = items\n  .filter(i => Array.isArray(i.json.data))\n  .flatMap(i => i.json.data);\n\n// 3) Devolver un item por cada vacante, embebiendo el cv_feedback\nreturn allJobs.map(job => ({\n  json: {\n    ...job,\n    cv_feedback: cvItem\n  }\n}));\n"
+        "jsCode": "// Recuperar todos los items de entrada\nconst items = $input.all();\n\n// 1) Extraer feedback del CV (el primero que tenga este campo)\nconst cvItem = items.find(i => i.json.cv_feedback)?.json.cv_feedback || {};\n\n// 2) Recolectar y aplanar todos los arrays `data` válidos (no nulos, no undefined, y que sean arrays)\nconst allJobs = items\n  .map(i => i.json.data)\n  .filter(data => Array.isArray(data))\n  .flat();\n\n// 3) Si no hay vacantes, devolver al menos un item vacío con el feedback para que el flujo continúe\nif (allJobs.length === 0) {\n  return [{\n    json: {\n      cv_feedback: cvItem\n    }\n  }];\n}\n\n// 4) Devolver un item por cada vacante, embebiendo el cv_feedback\nreturn allJobs.map(job => ({\n  json: {\n    ...job,\n    cv_feedback: cvItem\n  }\n}));\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -502,7 +502,7 @@
     "callerPolicy": "workflowsFromSameOwner",
     "errorWorkflow": "U1Y5eBAavHz4xTQw"
   },
-  "versionId": "fca1a861-2717-4188-851c-6bf1efadbe31",
+  "versionId": "cc4eea5a-c45d-482a-a41b-b7f7ac3c6879",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "87c57264427db34d6cb9d3745f87388c2f788b0742229f1a7c16b7376d7d87c6"
